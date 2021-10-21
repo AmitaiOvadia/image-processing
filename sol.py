@@ -66,7 +66,7 @@ def imdisplay(filename, representation):
 def rgb2yiq(imRGB):
     """
     converting image from RGB representation to YIQ by multiplying each color
-    vector in the image'e indexes with the convertion matrix
+    vector in the image's indexes with the conversion matrix
     :param imRGB: an RGB image
     :return: a YIQ image
     """
@@ -103,14 +103,16 @@ def histogram_equalize(im_orig):
         img = rgb2yiq(im_orig)[:, :, 0]
     # now img is gray scale image
     img = img * 265
-    img = img.astype(np.int32)
-    orig_hist, bounds = np.histogram(img, 256, (0, 255))
-    # print(orig_hist)
-    # orig_hist = np.divide(orig_hist, orig_hist.max)
-    print(orig_hist)
-    # plt.tick_params(labelsize=10)
-    # plt.hist(img.flatten(), bins=128)
-    # plt.show()
+    img = img.astype(np.int32)   # setting image as ints [0,255]
+    orig_hist, bounds = np.histogram(img, 256, (0, 255))   # computing histogram
+    orig_cumulative = np.cumsum(orig_hist)                 # cumulative histogram
+    orig_cumulative_float = orig_cumulative.astype(np.float64)  # cumulative as float
+    max_val = np.amax(orig_cumulative_float)               # max value
+    cumulative_norm_float = (orig_cumulative_float/max_val)*256  # normalize cumulative
+    cumulative_norm = cumulative_norm_float.astype(np.int32)  # back to int
+    x_axis = np.arange(256)
+    plt.plot(x_axis, cumulative_norm)
+    plt.show()
 
 
     # todo if the original image was rgb: convert back to rgb

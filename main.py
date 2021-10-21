@@ -19,10 +19,11 @@ def print_gray_gradient():
     plt.show()
 
 def display_negative():
-    im = sol.read_image(r"image.png", 1)
+    im = sol.imdisplay(r"image.png", 1)
 
 
 def main():
+    # sol.imdisplay(r"image.png", 1)
     im = sol.read_image(r"image.png", 1)
     im = sol.histogram_equalize(im)
     # print_gray_gradient()
