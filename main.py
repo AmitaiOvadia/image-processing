@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import sol
 import math
+
+
 def print_gray_gradient():
     x = np.hstack([np.repeat(np.arange(0, 50, 2), 10)[None, :],
                    np.array([255] * 6)[None, :]])
@@ -16,13 +18,14 @@ def print_gray_gradient():
     plt.imshow(grad, cmap='gray')
     plt.show()
 
+def display_negative():
+    im = sol.read_image(r"image.png", 1)
+
 
 def main():
+    im = sol.read_image(r"image.png", 1)
+    im = sol.histogram_equalize(im)
     # print_gray_gradient()
-    # im = sol.read_image(r"image.png", 1)
-    print_gray_gradient()
-    # plt.imshow(im, cmap='gray')
-    # plt.show()
 
 if __name__ == "__main__":
     main()
