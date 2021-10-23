@@ -9,8 +9,7 @@ import matplotlib.image as mpimg
 
 
 
-x = np.hstack([np.repeat(np.arange(0,50,2),10)[None,:], np.array([255]*6)[None,:]])
-grad = np.tile(x,(256,1))
+
 GRAY_SCALE = 1
 RGB = 2
 RGB_to_YIQ = np.array([[0.299, 0.587, 0.114],
@@ -41,8 +40,9 @@ def get_cumulative_histogram(histogram):
     return np.cumsum(histogram)
 
 
-def display_results(cumulative_equalized_histogram, cumulative_norm, hist_eq,
-                    hist_orig, im_eq, im_orig):
+def display_equalization_results(hist_eq, hist_orig, im_eq, im_orig):
+    cumulative_equalized_histogram = get_cumulative_histogram(hist_eq)
+    cumulative_norm = get_cumulative_norm(hist_orig)
     plt.imshow(im_orig, cmap='gray')
     plt.show()
     plot_histogram(hist_orig)
@@ -53,7 +53,46 @@ def display_results(cumulative_equalized_histogram, cumulative_norm, hist_eq,
     plot_histogram(cumulative_equalized_histogram)
 
 
+def get_equalized_img(cumulative_norm, img):
+    first_nonzero_inx = np.where(cumulative_norm != 0)[0][0]  # first nonzero
+    last_value = cumulative_norm[len(cumulative_norm) - 1]
+    # look-out table: T(k) = (C(k) - C(m))/(c(last) - C(m)))*255
+    # and turning back to int32
+    T = (((cumulative_norm - first_nonzero_inx) /
+          (last_value - first_nonzero_inx)) * HIGHEST_COLOR_VALUE).astype(
+        np.int32)
+    # each pixel with intensity k will be mapped to T[k]
+    im_eq = T[img]
+    return im_eq
+
+
+def get_cumulative_norm(hist_orig):
+    orig_cumulative = get_cumulative_histogram(
+        hist_orig)  # cumulative histogram
+    orig_cumulative_float = orig_cumulative.astype(
+        np.float64)  # cumulative as float
+    max_val = np.amax(orig_cumulative_float)  # max value
+    cumulative_norm = ((
+                                   orig_cumulative_float / max_val) *  # normalize cumulative histogram
+                       HIGHEST_COLOR_VALUE).astype(np.int32)  # back to int
+    return cumulative_norm
+
+
+def get_workable_img(im_orig, im_orig_yiq):
+    img = None
+    if image_dimensions(im_orig) == GRAY_SCALE_DIM:
+        img = im_orig
+    if image_dimensions(im_orig) == RGB_DIM:
+        # convert to YIQ, img will represent only the Y axis
+        img = im_orig_yiq[:, :, 0]
+    # now img is gray scale image
+    img = (img * HIGHEST_COLOR_VALUE / np.amax(img)).astype(
+        np.int32)  # make sure it's normalized to 255
+    return img
+
+
 # API
+
 
 def read_image(filename, representation):
     """
@@ -130,42 +169,28 @@ def histogram_equalize(im_orig):
     im_eq = equalized image same characteristics as the im_orig
     hist_orig = original histogram
     hist_eq = the equalized histogram
+    *i means the number of line in algorithem in ex1
     """
-    img = None
-    if image_dimensions(im_orig) == GRAY_SCALE_DIM:
-        img = im_orig
     if image_dimensions(im_orig) == RGB_DIM:
         # convert to YIQ, img will represent only the Y axis
         im_orig_yiq = rgb2yiq(im_orig)
-        img = im_orig_yiq[:, :, 0]
-    # now img is gray scale image
-    img = (img * HIGHEST_COLOR_VALUE/np.amax(img)).astype(np.int32)   # make sure it's normalized to 255
-    hist_orig = get_histogram(img)   # computing histogram
-    orig_cumulative = get_cumulative_histogram(hist_orig)  # cumulative histogram
-    orig_cumulative_float = orig_cumulative.astype(np.float64)  # cumulative as float
-    max_val = np.amax(orig_cumulative_float)               # max value
-    cumulative_norm = ((orig_cumulative_float/max_val)* # normalize cumulative histogram
-                       HIGHEST_COLOR_VALUE).astype(np.int32)  # back to int
-    first_nonzero_inx = np.where(cumulative_norm != 0)[0][0]  # find first nonzero
-    last_value = cumulative_norm[len(cumulative_norm) - 1]
-    # look-out table: T(k) = (C(k) - C(m))/(c(last) - C(m)))*255
-    # and turning back to int32
-    T = (((cumulative_norm - first_nonzero_inx)/
-          (last_value - first_nonzero_inx))*HIGHEST_COLOR_VALUE).astype(np.int32)
-    # each pixel with intensity k will be mapped to T[k]
-    im_eq = T[img]
+        img = get_workable_img(im_orig, im_orig_yiq)
+    elif image_dimensions(im_orig) == GRAY_SCALE_DIM:
+        img = get_workable_img(im_orig, 0)
+    hist_orig = get_histogram(img)   # computing histogram (*1)
+    cumulative_norm = get_cumulative_norm(hist_orig)  # (*2 + *3 + *4)
+    im_eq = get_equalized_img(cumulative_norm, img)  # (*5 + *6 + *7)
     hist_eq = get_histogram(im_eq)
-    cumulative_equalized_histogram = get_cumulative_histogram(hist_eq)
     if image_dimensions(im_orig) == RGB_DIM:
         # assigning the y axis of the original imagE in the YIQ space with the
         # new equaliazed image
         im_orig_yiq[:, :, 0] = im_eq/HIGHEST_COLOR_VALUE
         # transforming back to rgb and assigning to im_eq
         im_eq = yiq2rgb(im_orig_yiq)
-
-    # display_results(cumulative_equalized_histogram, cumulative_norm, hist_eq,
-    #                 hist_orig, im_eq, im_orig)
-
+    im_eq = im_eq/HIGHEST_COLOR_VALUE  # normalize again to [0,1] values
+    # display_equalization_results(hist_eq, hist_orig, im_eq, im_orig)
     return [im_eq, hist_orig, hist_eq]
+
+
 
 
