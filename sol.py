@@ -1,9 +1,13 @@
 import numpy as np
 from skimage.color import rgb2gray
+from skimage.color import rgb2yiq
 from imageio import imread, imwrite
 import matplotlib as matpl
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+
+
+
 
 x = np.hstack([np.repeat(np.arange(0,50,2),10)[None,:], np.array([255]*6)[None,:]])
 grad = np.tile(x,(256,1))
@@ -15,9 +19,41 @@ RGB_to_YIQ = np.array([[0.299, 0.587, 0.114],
 RGB_DIM = 3
 GRAY_SCALE_DIM = 2
 COLOR_AXIS = 2
+HIGHEST_COLOR_VALUE = 255
+
+# private methods
 
 def image_dimensions(image):
     return len(image.shape)
+
+
+def plot_histogram(cumulative_norm):
+    x_axis = np.arange(256)
+    plt.plot(x_axis, cumulative_norm)
+    plt.show()
+
+
+def get_histogram(image):
+    return np.histogram(image, 256, (0, HIGHEST_COLOR_VALUE))[0]
+
+
+def get_cumulative_histogram(histogram):
+    return np.cumsum(histogram)
+
+
+def display_results(cumulative_equalized_histogram, cumulative_norm, hist_eq,
+                    hist_orig, im_eq, im_orig):
+    plt.imshow(im_orig, cmap='gray')
+    plt.show()
+    plot_histogram(hist_orig)
+    plot_histogram(cumulative_norm)
+    plt.imshow(rgb2gray(im_eq), cmap='gray')
+    plt.show()
+    plot_histogram(hist_eq)
+    plot_histogram(cumulative_equalized_histogram)
+
+
+# API
 
 def read_image(filename, representation):
     """
@@ -99,20 +135,37 @@ def histogram_equalize(im_orig):
     if image_dimensions(im_orig) == GRAY_SCALE_DIM:
         img = im_orig
     if image_dimensions(im_orig) == RGB_DIM:
-        # convert to YIQ, im will represent only the Y axis
-        img = rgb2yiq(im_orig)[:, :, 0]
+        # convert to YIQ, img will represent only the Y axis
+        im_orig_yiq = rgb2yiq(im_orig)
+        img = im_orig_yiq[:, :, 0]
     # now img is gray scale image
-    img = img * 265
-    img = img.astype(np.int32)   # setting image as ints [0,255]
-    orig_hist, bounds = np.histogram(img, 256, (0, 255))   # computing histogram
-    orig_cumulative = np.cumsum(orig_hist)                 # cumulative histogram
+    img = (img * HIGHEST_COLOR_VALUE/np.amax(img)).astype(np.int32)   # make sure it's normalized to 255
+    hist_orig = get_histogram(img)   # computing histogram
+    orig_cumulative = get_cumulative_histogram(hist_orig)  # cumulative histogram
     orig_cumulative_float = orig_cumulative.astype(np.float64)  # cumulative as float
     max_val = np.amax(orig_cumulative_float)               # max value
-    cumulative_norm_float = (orig_cumulative_float/max_val)*256  # normalize cumulative
-    cumulative_norm = cumulative_norm_float.astype(np.int32)  # back to int
-    x_axis = np.arange(256)
-    plt.plot(x_axis, cumulative_norm)
-    plt.show()
+    cumulative_norm = ((orig_cumulative_float/max_val)* # normalize cumulative histogram
+                       HIGHEST_COLOR_VALUE).astype(np.int32)  # back to int
+    first_nonzero_inx = np.where(cumulative_norm != 0)[0][0]  # find first nonzero
+    last_value = cumulative_norm[len(cumulative_norm) - 1]
+    # look-out table: T(k) = (C(k) - C(m))/(c(last) - C(m)))*255
+    # and turning back to int32
+    T = (((cumulative_norm - first_nonzero_inx)/
+          (last_value - first_nonzero_inx))*HIGHEST_COLOR_VALUE).astype(np.int32)
+    # each pixel with intensity k will be mapped to T[k]
+    im_eq = T[img]
+    hist_eq = get_histogram(im_eq)
+    cumulative_equalized_histogram = get_cumulative_histogram(hist_eq)
+    if image_dimensions(im_orig) == RGB_DIM:
+        # assigning the y axis of the original imagE in the YIQ space with the
+        # new equaliazed image
+        im_orig_yiq[:, :, 0] = im_eq/HIGHEST_COLOR_VALUE
+        # transforming back to rgb and assigning to im_eq
+        im_eq = yiq2rgb(im_orig_yiq)
+
+    # display_results(cumulative_equalized_histogram, cumulative_norm, hist_eq,
+    #                 hist_orig, im_eq, im_orig)
+
+    return [im_eq, hist_orig, hist_eq]
 
 
-    # todo if the original image was rgb: convert back to rgb
