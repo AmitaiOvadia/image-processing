@@ -10,7 +10,7 @@ import sol
 import math
 
 x = np.hstack([np.repeat(np.arange(0, 50, 2), 10)[None, :],
-               np.array([255] * 6)[None, :]])
+                   np.array([255] * 6)[None, :]])
 grad = np.tile(x, (256, 1))
 
 def print_gray_gradient():
@@ -18,7 +18,7 @@ def print_gray_gradient():
                    np.array([255] * 6)[None, :]])
     grad = np.tile(x, (256, 1))
     grad = np.log(grad + 1)
-    plt.imshow(grad)
+    plt.imshow(grad, cmap='gray')
     plt.show()
 
 def display_negative():
@@ -26,10 +26,8 @@ def display_negative():
 
 
 def main():
-    # sol.imdisplay(r"image3.png", 2)
-    # print_gray_gradient()
+    # sol.imdisplay(r"image.png", 1)
     im = sol.read_image(r"image.png", 1)
-    # # im = grad
     sol.histogram_equalize(grad)
     # print_gray_gradient()
 

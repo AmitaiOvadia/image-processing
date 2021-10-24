@@ -191,6 +191,17 @@ def histogram_equalize(im_orig):
     # display_equalization_results(hist_eq, hist_orig, im_eq, im_orig)
     return [im_eq, hist_orig, hist_eq]
 
-
-
-
+def quantize(im_orig, n_quant, n_iter):
+    """
+    performs optimal quantization of a given grayscale or RGB image.
+    If an RGB image is given, the quantization procedure operates on the Y channel of the
+    corresponding YIQ image and then convert back from YIQ to RGB
+    solves an optimization problem: min()
+    :param im_orig: is the input grayscale or RGB image to be quantized (float64 image with values in [0, 1]).
+    :param n_quant: is the number of intensities your output im_quant image should have.
+    :param n_iter: is the maximum number of iterations of the optimization procedure (may converge earlier.)
+    :return: output is a list [im_quant, error]
+    im_quant - is the quantized output image. (float64 image with values in [0, 1]).
+    error - is an array with shape (n_iter,) (or less) of the total intensities error for each iteration of the
+            quantization procedure.
+    """
