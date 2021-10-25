@@ -171,25 +171,37 @@ def histogram_equalize(im_orig):
     hist_eq = the equalized histogram
     *i means the number of line in algorithem in ex1
     """
+    cumulative_norm, hist_orig, img = get_int_img_histograms(im_orig)
+    im_eq = get_equalized_img(cumulative_norm, img)  # (*5 + *6 + *7)
+    hist_eq = get_histogram(im_eq)
+    if image_dimensions(im_orig) == RGB_DIM:
+        im_eq = back_to_rgb(im_eq, im_orig)
+    im_eq = im_eq/HIGHEST_COLOR_VALUE  # normalize again to [0,1] values
+    # display_equalization_results(hist_eq, hist_orig, im_eq, im_orig)
+    return [im_eq, hist_orig, hist_eq]
+
+
+def back_to_rgb(img, im_orig):
+    # assigning the y axis of the original imagE in the YIQ space with the
+    # new equaliazed image
+    im_orig_yiq = rgb2yiq(im_orig)
+    im_orig_yiq[:, :, 0] = img / HIGHEST_COLOR_VALUE
+    # transforming back to rgb and assigning to im_eq
+    img = yiq2rgb(im_orig_yiq)
+    return img
+
+
+def get_int_img_histograms(im_orig):
     if image_dimensions(im_orig) == RGB_DIM:
         # convert to YIQ, img will represent only the Y axis
         im_orig_yiq = rgb2yiq(im_orig)
         img = get_workable_img(im_orig, im_orig_yiq)
     elif image_dimensions(im_orig) == GRAY_SCALE_DIM:
         img = get_workable_img(im_orig, 0)
-    hist_orig = get_histogram(img)   # computing histogram (*1)
+    hist_orig = get_histogram(img)  # computing histogram (*1)
     cumulative_norm = get_cumulative_norm(hist_orig)  # (*2 + *3 + *4)
-    im_eq = get_equalized_img(cumulative_norm, img)  # (*5 + *6 + *7)
-    hist_eq = get_histogram(im_eq)
-    if image_dimensions(im_orig) == RGB_DIM:
-        # assigning the y axis of the original imagE in the YIQ space with the
-        # new equaliazed image
-        im_orig_yiq[:, :, 0] = im_eq/HIGHEST_COLOR_VALUE
-        # transforming back to rgb and assigning to im_eq
-        im_eq = yiq2rgb(im_orig_yiq)
-    im_eq = im_eq/HIGHEST_COLOR_VALUE  # normalize again to [0,1] values
-    # display_equalization_results(hist_eq, hist_orig, im_eq, im_orig)
-    return [im_eq, hist_orig, hist_eq]
+    return cumulative_norm, hist_orig, img
+
 
 def quantize(im_orig, n_quant, n_iter):
     """
@@ -197,6 +209,7 @@ def quantize(im_orig, n_quant, n_iter):
     If an RGB image is given, the quantization procedure operates on the Y channel of the
     corresponding YIQ image and then convert back from YIQ to RGB
     solves an optimization problem: min()
+
     :param im_orig: is the input grayscale or RGB image to be quantized (float64 image with values in [0, 1]).
     :param n_quant: is the number of intensities your output im_quant image should have.
     :param n_iter: is the maximum number of iterations of the optimization procedure (may converge earlier.)
@@ -205,3 +218,106 @@ def quantize(im_orig, n_quant, n_iter):
     error - is an array with shape (n_iter,) (or less) of the total intensities error for each iteration of the
             quantization procedure.
     """
+    cumulative_norm, hist_orig, img = get_int_img_histograms(im_orig)
+    z_arr, q_arr = z_q_initialize(cumulative_norm, n_quant)
+    error_arr = []
+    for i in range(n_iter):
+        error = calculate_error(z_arr, q_arr, hist_orig)
+        error_arr.append(error)
+        q_arr = update_q_arr(q_arr, z_arr, hist_orig)
+        z_arr = update_z_arr(q_arr, z_arr)
+    img_quantized = quant_by_q_z(hist_orig, img, q_arr, z_arr)
+    print(error_arr)
+    plt.imshow(img_quantized, cmap='gray')
+    plt.show()
+    plot_histogram(get_histogram(img_quantized))
+
+def update_q_arr(q_arr, z_arr, hist_orig):
+
+    for i in range(len(q_arr)):
+        q_mone = 0
+        for i in range(len(q_arr)):
+            for z in range(z_arr[i], z_arr[i + 1]):
+                q_mone += z * hist_orig[z]
+        q_mechane = 0
+        for i in range(len(q_arr)):
+            for z in range(z_arr[i], z_arr[i + 1]):
+                q_mechane += hist_orig[z]
+        q_arr[i] = q_mone//q_mechane
+    return q_arr
+
+def update_z_arr(q_arr, z_arr):
+    for i in range(1, len(q_arr)):
+        z_arr[i] = (q_arr[i-1] + q_arr[i]) // 2
+    return z_arr
+
+
+def calculate_error(z_arr, q_arr, hist_orig):
+    """
+    calculating the error, means the total amount of (shift of zj to qi)^2 * histogram_value(zj)
+    do it for every qi
+    z_arr = [ 0  59 109 159 209 255]
+    q_arr = [ 29  84 134 184 232]
+    :param z_arr:
+    :param q_arr:
+    :param hist_orig:
+    :return:
+    """
+    error = 0
+    for i in range(len(q_arr)):
+        for z in range(z_arr[i], z_arr[i + 1]):
+            error += (q_arr[i] - z)**2 * hist_orig[z]
+    return error
+
+
+def quant_by_q_z(hist_orig, img, q_arr, z_arr):
+    """
+    :param hist_orig: ??
+    :param img: ??
+    :param q_arr: the values to which each of the segments’ intensities will map. q is also a one
+           dimensional array, containing n_quant elements.
+    :param z_arr: the borders which divide the histograms into segments. z is an array with shape
+           (n_quant+1,). The first and last elements are 0 and 255 respectively.
+    :return: a quantized image
+    """
+
+    hist_quantized = np.zeros(256).astype(np.int32)
+    j = 0
+    for i in range(HIGHEST_COLOR_VALUE):
+        min_val = z_arr[j]
+        max_val = z_arr[j + 1]
+        target_val = q_arr[j]
+        hist_val = hist_orig[i]
+        if i >= min_val and i < max_val:
+            hist_quantized[target_val] += hist_val
+        if i >= max_val: j += 1
+    hist_quantized_cumulative_norm = get_cumulative_norm(hist_quantized)
+    img_quantized = hist_quantized_cumulative_norm[img]
+    return img_quantized
+
+
+def z_q_initialize(cumulative_norm, n_quant):
+    """
+    :param cumulative_norm: cumulative histogram of the original image
+    :param n_quant: number of quants
+    :return: q_arr: the values to which each of the segments’ intensities will map. q is also a one
+                dimensional array, containing n_quant elements.
+             z_arr: the borders which divide the histograms into segments. z is an array with shape
+                (n_quant+1,). The first and last elements are 0 and 255 respectively.
+    """
+    buffer = int(HIGHEST_COLOR_VALUE/n_quant)
+    z_arr = np.zeros(n_quant + 1).astype(np.int32)
+    for i in range(1, n_quant):
+        x = np.argmax(cumulative_norm > i*buffer)
+        z_arr[i] = x
+    z_arr[-1] = HIGHEST_COLOR_VALUE
+    q_arr = np.zeros(n_quant).astype(np.int32)
+    for i in range(len(q_arr)):
+        q_arr[i] = (z_arr[i] + z_arr[i+1])//2
+    return z_arr, q_arr
+
+
+# todo initialize z in a smarter way:
+#  find the desired num of pixels in a chunk, and find the indexes in the cumulative histogram that that represent
+#  the transition from one chunk to another
+#

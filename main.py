@@ -28,7 +28,8 @@ def display_negative():
 def main():
     # sol.imdisplay(r"image.png", 1)
     im = sol.read_image(r"image.png", 1)
-    sol.histogram_equalize(grad)
+    grad_equalized = sol.histogram_equalize(grad)[0]
+    sol.quantize(grad_equalized, 5, 5)
     # print_gray_gradient()
 
 if __name__ == "__main__":
