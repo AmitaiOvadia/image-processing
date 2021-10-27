@@ -6,8 +6,6 @@ import matplotlib as matpl
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
-import sol_ariel
-
 GRAY_SCALE = 1
 RGB = 2
 RGB_to_YIQ = np.array([[0.299, 0.587, 0.114],
