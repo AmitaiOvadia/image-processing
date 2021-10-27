@@ -1,0 +1,15 @@
+
+
+Question:
+
+    The quantization procedure needs an initial segment division of [0..255] to segments, z. If a division
+    will have a gray level segment with no pixels, the procedure will crash (Q1: Why?)
+
+Answer:
+ in this code segment I evaluate a certain q(i): if the sum of all the z's in the chunk is 0
+ (no colors in this segment) then we will have a division by zero the final evaluation
+        z_bins = np.arange(z_arr[i], z_arr[i+1])
+        histogram_chunk_of_z_bins = hist_orig[z_bins]   # (z_bins,) vector
+        mone = z_bins * histogram_chunk_of_z_bins  # z(j)*h(j)   (z_bins,) vector
+        mechane = histogram_chunk_of_z_bins  # (z_bins,) vector
+        q_i = int(mone.sum() // mechane.sum())    ***************  division by zero if mechane == 0 **********

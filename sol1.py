@@ -1,12 +1,9 @@
 import numpy as np
 from skimage.color import rgb2gray
-from skimage.color import rgb2yiq
 from imageio import imread, imwrite
 import matplotlib as matpl
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-
-import sol_ariel
 
 GRAY_SCALE = 1
 RGB = 2
