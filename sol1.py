@@ -1,7 +1,6 @@
 import numpy as np
+import skimage.color
 from skimage.color import rgb2gray
-from imageio import imread, imwrite
-import matplotlib as matpl
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
@@ -15,6 +14,7 @@ GRAY_SCALE_DIM = 2
 COLOR_AXIS = 2
 HIGHEST_COLOR_VALUE = 255
 NUMBER_OF_COLORS = 256
+GRAY_TXT = 'gray'
 
 # private methods
 
@@ -39,11 +39,11 @@ def get_cumulative_histogram(histogram):
 def display_equalization_results(hist_eq, hist_orig, im_eq, im_orig):
     cumulative_equalized_histogram = get_cumulative_histogram(hist_eq)
     cumulative_norm = get_cumulative_norm(hist_orig)
-    plt.imshow(im_orig, cmap='gray')
+    plt.imshow(im_orig, cmap=GRAY_TXT)
     plt.show()
     plot_histogram(hist_orig)
     plot_histogram(cumulative_norm)
-    plt.imshow(rgb2gray(im_eq), cmap='gray')
+    plt.imshow(rgb2gray(im_eq), cmap=GRAY_TXT)
     plt.show()
     plot_histogram(hist_eq)
     plot_histogram(cumulative_equalized_histogram)
@@ -86,102 +86,11 @@ def get_workable_img(im_orig, im_orig_yiq):
         np.int32)  # make sure it's normalized to 255
     return img
 
-
-# API
-
-
-def read_image(filename, representation):
-    """
-    A function which reads an image file and converts it into a given
-    representation.
-    :param filename: <string> the filename of an image (grayscale or RGB).
-    :param representation: <int> gray scale image (1) or an RGB image (2)
-    :return: an image, a matrix of type np.float64 with intensities with
-             intensities normalized to the range [0, 1].
-    """
-    img = mpimg.imread(filename)  # reading image
-    img_float64 = img.astype(np.float64)  # converting from float32 to float64
-    if image_dimensions(img) == GRAY_SCALE_DIM and representation == GRAY_SCALE:
-        return img_float64  # checks if image is already gray scale
-    if representation == GRAY_SCALE:
-        return rgb2gray(img_float64)   # convert from rgb to gray scale
-    if representation == RGB:
-        return img_float64             # no need to convert
-    return None
-
-
-def imdisplay(filename, representation):
-    """
-    displaying an image given it's representation
-    :param filename: <string> the filename of an image (grayscale or RGB).
-    :param representation: the representation in which to display the image
-           <int> gray scale image (1) or an RGB image (2)
-    :return: nothing
-    """
-    image = read_image(filename, representation)
-    if representation == GRAY_SCALE:
-        if image_dimensions(image) == GRAY_SCALE_DIM:
-            plt.imshow(image, cmap='gray')
-            plt.show()
-        elif image_dimensions(image) == RGB_DIM:
-            # if image is RGB and representation is gray scale: convert to gray
-            image = rgb2gray(image)  # convert to gray scale
-            plt.imshow(image, cmap='gray')
-            plt.show()
-    elif representation == RGB:
-        if image_dimensions(image) == RGB_DIM:
-            plt.imshow(image)
-            plt.show()
-
-
-def rgb2yiq(imRGB):
-    """
-    converting image from RGB representation to YIQ by multiplying each color
-    vector in the image's indexes with the conversion matrix
-    :param imRGB: an RGB image
-    :return: a YIQ image
-    """
-    # multiplying each color vector (the 2th axis) with the conversion matrix
-    yiq_image = np.tensordot(imRGB, RGB_to_YIQ, axes=([COLOR_AXIS], [0]))
-    return yiq_image
-
-def yiq2rgb(imYIQ):
-    """
-    converting image from YIQ representation to RGB by multiplying each color
-    vector in the image'e indexes with the conversion matrix inv(RGB_to_YIQ)
-    :param imYIQ: a YIQ image
-    :return: a RGB image
-    """
-    YIQ_to_RGB = np.linalg.inv(RGB_to_YIQ)  # the inverse of the RGB_to_YIQ mat
-    # multiplying each color vector (the 2th axis) with the conversion matrix
-    rgb_image = np.tensordot(imYIQ, YIQ_to_RGB, axes=([COLOR_AXIS], [0]))
-    return rgb_image
-
-def histogram_equalize(im_orig):
-    """
-    Performs histogram equalization
-    :param im_orig: gray scale or RGB float64 image with values in [0, 1].
-    :return: a list of [im_eq, hist_orig, hist_eq]
-    im_eq = equalized image same characteristics as the im_orig
-    hist_orig = original histogram
-    hist_eq = the equalized histogram
-    *i means the number of line in algorithem in ex1
-    """
-    cumulative_norm, hist_orig, img = get_int_img_histograms(im_orig)
-    im_eq = get_equalized_img(cumulative_norm, img)  # (*5 + *6 + *7)
-    hist_eq = get_histogram(im_eq)
-    if image_dimensions(im_orig) == RGB_DIM:
-        im_eq = back_to_rgb(im_eq, im_orig)
-    im_eq = im_eq/HIGHEST_COLOR_VALUE  # normalize again to [0,1] values
-    # display_equalization_results(hist_eq, hist_orig, im_eq, im_orig)
-    return [im_eq, hist_orig, hist_eq]
-
-
 def back_to_rgb(img, im_orig):
     # assigning the y axis of the original imagE in the YIQ space with the
     # new equaliazed image
     im_orig_yiq = rgb2yiq(im_orig)
-    im_orig_yiq[:, :, 0] = img / HIGHEST_COLOR_VALUE
+    im_orig_yiq[:, :, 0] = img
     # transforming back to rgb and assigning to im_eq
     img = yiq2rgb(im_orig_yiq)
     return img
@@ -199,34 +108,18 @@ def get_int_img_histograms(im_orig):
     return cumulative_norm, hist_orig, img
 
 
-def quantize(im_orig, n_quant, n_iter):
-    """
-    performs optimal quantization of a given grayscale or RGB image.
-    If an RGB image is given, the quantization procedure operates on the Y channel of the
-    corresponding YIQ image and then convert back from YIQ to RGB
-    solves an optimization problem: min()
-
-    :param im_orig: is the input grayscale or RGB image to be quantized (float64 image with values in [0, 1]).
-    :param n_quant: is the number of intensities your output im_quant image should have.
-    :param n_iter: is the maximum number of iterations of the optimization procedure (may converge earlier.)
-    :return: output is a list [im_quant, error]
-    im_quant - is the quantized output image. (float64 image with values in [0, 1]).
-    error - is an array with shape (n_iter,) (or less) of the total intensities error for each iteration of the
-            quantization procedure.
-    """
-    # img is the grayscale int representation of the image
-    if image_dimensions(im_orig) == RGB_DIM:
-        img_yiq = rgb2yiq(im_orig)
-        img = img_yiq[:, :, 0]
-        im_quant_y, error_arr = quantize_helper(img, n_iter, n_quant)
-        img_yiq[:, :, 0] = im_quant_y
-        im_quant = yiq2rgb(img_yiq)
-        return [im_quant, error_arr]
-    return quantize_helper(im_orig, n_iter, n_quant)
-
 
 def quantize_helper(im_orig, n_iter, n_quant):
-    cumulative_norm, hist_orig, img = get_int_img_histograms(im_orig)
+    """
+    :param im_orig: 2D image in float64
+    :param n_iter:
+    :param n_quant:
+    :return:
+    """
+    img = (im_orig*HIGHEST_COLOR_VALUE).astype(np.int32)
+    hist_orig = get_histogram(img)
+    cumulative_norm = get_cumulative_norm(hist_orig)
+    # cumulative_norm, hist_orig, img = get_int_img_histograms(im_orig)
     z_arr, q_arr = z_q_initialize(cumulative_norm, n_quant)
     error_arr = []
     for i in range(n_iter):  # optimization
@@ -241,7 +134,7 @@ def quantize_helper(im_orig, n_iter, n_quant):
 
 
 def normalize_img(img):
-    return (img/HIGHEST_COLOR_VALUE).astype(np.float64)
+    return img.astype(np.float64)/HIGHEST_COLOR_VALUE
 
 def update_q_arr(z_arr, hist_orig, n_quant):
     q_arr = []
@@ -250,7 +143,10 @@ def update_q_arr(z_arr, hist_orig, n_quant):
         histogram_chunk_of_z_bins = hist_orig[z_bins]   # (z_bins,) vector
         mone = z_bins * histogram_chunk_of_z_bins  # z(j)*h(j)   (z_bins,) vector
         mechane = histogram_chunk_of_z_bins  # (z_bins,) vector
-        q_i = int(mone.sum() // mechane.sum())
+        if mechane.sum() == 0:
+            q_i = 0
+        else:
+            q_i = int(mone.sum() // mechane.sum())
         q_arr.append(q_i)
     return q_arr
 
@@ -334,8 +230,135 @@ def z_q_initialize(cumulative_norm, n_quant):
         q_arr[i] = (z_arr[i] + z_arr[i+1])//2
     return z_arr, q_arr
 
+def quantize_rgb_img(im_orig, n_iter, n_quant):
+    # img_yiq = rgb2yiq(im_orig)
+    img_yiq = skimage.color.rgb2yiq(im_orig)
+    img = img_yiq[:, :, 0]
+    im_quant_y, error_arr = quantize_helper(img, n_iter, n_quant)
+    img_yiq[:, :, 0] = im_quant_y
+    im_quant = yiq2rgb(img_yiq)
+    return [im_quant, error_arr]
 
-# todo initialize z in a smarter way:
-#  find the desired num of pixels in a chunk, and find the indexes in the cumulative histogram that that represent
-#  the transition from one chunk to another
-#
+
+# API specified in ex1
+
+
+def read_image(filename, representation):
+    """
+    A function which reads an image file and converts it into a given
+    representation.
+    :param filename: <string> the filename of an image in [0,1] intensities (grayscale or RGB).
+    :param representation: <int> gray scale image (1) or an RGB image (2)
+    :return: an image, a matrix of type np.float64 with intensities with
+             intensities normalized to the range [0, 1].
+    """
+    img = mpimg.imread(filename)  # reading image
+    img_float64 = img.astype(np.float64)  # converting from float32 to float64
+    if img_float64.max() > 1:
+        img_float64 /= HIGHEST_COLOR_VALUE  # normalize
+    if image_dimensions(img) == GRAY_SCALE_DIM and representation == GRAY_SCALE:
+        return img_float64  # checks if image is already gray scale
+    if representation == GRAY_SCALE:   # image must be rgb
+        return rgb2gray(img_float64)   # convert from rgb to gray scale
+    if representation == RGB:
+        return img_float64             # no need to convert
+    return None
+
+
+def imdisplay(filename, representation):
+    """
+    displaying an image given it's representation
+    :param filename: <string> the filename of an image (grayscale or RGB).
+    :param representation: the representation in which to display the image
+           <int> gray scale image (1) or an RGB image (2)
+    :return: nothing
+    """
+    image = read_image(filename, representation)
+    if representation == GRAY_SCALE:
+        if image_dimensions(image) == GRAY_SCALE_DIM:
+            plt.imshow(image, cmap=GRAY_TXT)
+            plt.show()
+        elif image_dimensions(image) == RGB_DIM:
+            # if image is RGB and representation is gray scale: convert to gray
+            image = rgb2gray(image)  # convert to gray scale
+            plt.imshow(image, cmap=GRAY_TXT)
+            plt.show()
+    elif representation == RGB:
+        if image_dimensions(image) == RGB_DIM:
+            plt.imshow(image)
+            plt.show()
+
+
+def rgb2yiq(imRGB):
+    """
+    converting image from RGB representation to YIQ by multiplying each color
+    vector in the image's indexes with the conversion matrix
+    :param imRGB: an RGB image
+    :return: a YIQ image
+    """
+    # multiplying each color vector (the 2th axis) with the conversion matrix (transposed)
+    # If a is an N - D array and b is an M - D array(where M >= 2), it is a sum product over the *last* axis of a and
+    # the second - to - last axis of b: (from numpy)
+    yiq_image = imRGB.dot(RGB_to_YIQ.T)
+    return yiq_image
+
+
+def yiq2rgb(imYIQ):
+    """
+    converting image from YIQ representation to RGB by multiplying each color
+    vector in the image'e indexes with the conversion matrix inv(RGB_to_YIQ)
+    :param imYIQ: a YIQ image
+    :return: a RGB image
+    """
+    YIQ_to_RGB = np.linalg.inv(RGB_to_YIQ)  # the inverse of the RGB_to_YIQ mat
+    # multiplying each color vector (the 2th axis) with the conversion matrix (transposed)
+    # If a is an N - D array and b is an M - D array(where M >= 2), it is a sum product over the *last* axis of a and
+    # the second - to - last axis of b: (from numpy)
+    rgb_image = imYIQ.dot(YIQ_to_RGB.T)
+    return rgb_image
+
+def histogram_equalize(im_orig):
+    """
+    Performs histogram equalization
+    :param im_orig: gray scale or RGB float64 image with values in [0, 1].
+    :return: a list of [im_eq, hist_orig, hist_eq]
+    im_eq = equalized image same characteristics as the im_orig
+    hist_orig = original histogram
+    hist_eq = the equalized histogram
+    *i means the number of line in algorithem in ex1
+    """
+    #  get histogram and cumulative histogram, and 2D image converted to int[0,255]
+    cumulative_norm, hist_orig, img = get_int_img_histograms(im_orig)
+    im_eq = get_equalized_img(cumulative_norm, img)  # equalize
+    hist_eq = get_histogram(im_eq)
+    # if im_orig was rgb, convert back to yiq and replace the y axes with im_eq
+    im_eq = normalize_img(im_eq)
+    if image_dimensions(im_orig) == RGB_DIM:
+        im_eq = back_to_rgb(im_eq, im_orig)
+    return [im_eq, hist_orig, hist_eq]
+
+
+
+
+def quantize(im_orig, n_quant, n_iter):
+    """
+    performs optimal quantization of a given grayscale or RGB image.
+    If an RGB image is given, the quantization procedure operates on the Y channel of the
+    corresponding YIQ image and then convert back from YIQ to RGB
+    solves an optimization problem: min()
+
+    :param im_orig: is the input grayscale or RGB image to be quantized (float64 image with values in [0, 1]).
+    :param n_quant: is the number of intensities your output im_quant image should have.
+    :param n_iter: is the maximum number of iterations of the optimization procedure (may converge earlier.)
+    :return: output is a list [im_quant, error]
+    im_quant - is the quantized output image. (float64 image with values in [0, 1]).
+    error - is an array with shape (n_iter,) (or less) of the total intensities error for each iteration of the
+            quantization procedure.
+    """
+    if image_dimensions(im_orig) == RGB_DIM:   # if image is rgb:
+        return quantize_rgb_img(im_orig, n_iter, n_quant)
+    return quantize_helper(im_orig, n_iter, n_quant)
+
+
+
+
